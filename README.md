@@ -42,7 +42,7 @@ Una vez termine exitosamente el script, por favor recargar la página de cloudfo
 
 Para este objetivo se debe situar en la raíz del proyecto y correr el script3_populate_DB.py con el sgte comando: 
 
-    python3 script3_populate_DB.py
+        python3 script3_populate_DB.py
 
 Una vez se ejecuta exitosamente, ingresar al servicio de Dynamo DB en la consola de AWS, recargar página, buscar en tables la llamada "productos", explore table Items y podrás ver 2 registros con los datos solicitados en este objetivo.
 
