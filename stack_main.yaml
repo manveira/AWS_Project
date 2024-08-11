@@ -1,0 +1,355 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: Stack que crea una VPC, CloudFront, DynamoDB, S3 Bucket, API Gateway, y Lambdas.
+
+Parameters:
+  S3Bucket:
+    Type: String
+    Description: 'Nombre del bucket S3 creado en el stack s3'
+    Default: 's3demomanve'
+
+Resources:
+  # VPC
+  MyVPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      Tags:
+        - Key: 'lm_troux_uid'
+          Value: '123'
+        - Key: 'Name'
+          Value: 'vpc-manve'
+
+  # S3 Bucket Policy to allow CloudFront and Lambda access
+  S3BucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: "s3demomanve"
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - "lambda.us-east-1.amazonaws.com"
+                - "iam.amazonaws.com"
+                - "cloudfront.amazonaws.com"
+            Action: 's3:*'
+            Resource: "arn:aws:s3:::s3demomanve/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::082372733683:distribution/${CloudFrontDistribution}"            
+      
+  # DynamoDB Table
+  DynamoDBTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: 'productos'
+      AttributeDefinitions:
+        - AttributeName: 'Id'
+          AttributeType: 'N'
+        - AttributeName: 'Nombre'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'Id'
+          KeyType: 'HASH'
+        - AttributeName: 'Nombre'
+          KeyType: 'RANGE'
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      Tags:
+        - Key: 'lm_troux_uid'
+          Value: '123'
+
+  # IAM Role for Lambda
+  LambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: 'iamRoleDemo'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'S3AccessPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 's3:Get*'
+                  - 's3:List*'
+                  - 's3:Describe*'
+                  - 's3-object-lambda:Get*'
+                  - 's3-object-lambda:List*'                  
+                Resource:
+                  - 'arn:aws:s3:::s3demomanve'
+                  - 'arn:aws:s3:::s3demomanve/*'
+        - PolicyName: 'DynamoDBAccessPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Scan'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Describe*'
+                  - 'dynamodb:List*'
+                  - 'dynamodb:GetResourcePolicy'
+                Resource: 'arn:aws:dynamodb:*:*:table/productos'
+        - PolicyName: 'LambdasTestsccessPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'                
+      Tags:
+        - Key: 'lm_troux_uid'
+          Value: '123'
+
+
+  # Lambda Function for listing S3 objects
+  ListarS3Function:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'listars3'
+      Runtime: 'python3.8'
+      Handler: 'index.lambda_handler'
+      Code:
+        S3Bucket: !Ref S3Bucket
+        S3Key: 'code/listars3.zip'
+      Role: !GetAtt LambdaRole.Arn
+      Tags:
+        - Key: 'lm_troux_uid'
+          Value: '123'
+
+  # Lambda Function for listing DynamoDB items
+  ListarDynamoFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'listardynamo'
+      Runtime: 'python3.8'
+      Handler: 'index.lambda_handler'
+      Code:
+        S3Bucket: !Ref S3Bucket
+        S3Key: 'code/listardynamo.zip'
+      Role: !GetAtt LambdaRole.Arn
+      Tags:
+        - Key: 'lm_troux_uid'
+          Value: '123'
+
+# Lambda Permissions
+  LambdaInvokePermissionDynamo:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt ListarDynamoFunction.Arn
+      Principal: 'apigateway.amazonaws.com'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*'
+
+  LambdaInvokePermissionS3:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt ListarS3Function.Arn
+      Principal: 'apigateway.amazonaws.com'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*'
+
+  # API Gateway
+  ApiGateway:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: 'api-gateway'
+      Description: 'API Gateway para DynamoDB y S3'
+      FailOnWarnings: true
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+# Recurso /Api
+  ApiGatewayTestApiResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: 'api'
+      RestApiId: !Ref ApiGateway
+
+  ApiGatewayRootMethodGET:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: 'NONE'
+      HttpMethod: 'GET'
+      ResourceId: !Ref ApiGatewayTestApiResource
+      RestApiId: !Ref ApiGateway
+      Integration:  
+        IntegrationHttpMethod: 'POST'
+        Type: 'AWS'
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ListarDynamoFunction.Arn}/invocations
+        PassthroughBehavior: 'WHEN_NO_MATCH'
+        IntegrationResponses:
+          - StatusCode: '200'
+            SelectionPattern: ''
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseModels:
+            application/json: 'Empty'
+
+  ApiGatewayRootMethodPOST:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: 'NONE'
+      HttpMethod: 'POST'
+      ResourceId: !Ref ApiGatewayTestApiResource
+      RestApiId: !Ref ApiGateway
+      Integration:
+        IntegrationHttpMethod: 'POST'
+        Type: 'AWS'
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ListarS3Function.Arn}/invocations
+        PassthroughBehavior: 'WHEN_NO_MATCH'
+        IntegrationResponses:
+          - StatusCode: '200'
+            SelectionPattern: ''
+            ResponseTemplates:
+              application/json: ''               
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseModels:
+            application/json: 'Empty'
+      ApiKeyRequired: true      
+
+  # API Gateway Deployment
+  ApiGatewayDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    DependsOn: 
+      - ApiGatewayRootMethodGET
+      - ApiGatewayRootMethodPOST
+    Properties:
+      RestApiId: !Ref ApiGateway
+      StageName: 'test'
+
+# API Key
+  ApiGatewayApiKey:
+    Type: 'AWS::ApiGateway::ApiKey'
+    DependsOn: 
+      - ApiGateway
+      - ApiGatewayTestApiResource
+      - ApiGatewayDeployment
+    Properties:
+      Enabled: true
+      GenerateDistinctId: true
+      Name: 'MyApiKey'
+      StageKeys:
+        - RestApiId: !Ref ApiGateway
+          StageName: 'test'
+
+  # Usage Plan
+  ApiGatewayUsagePlan:
+    Type: 'AWS::ApiGateway::UsagePlan'
+    DependsOn: 
+      - ApiGateway
+      - ApiGatewayTestApiResource
+      - ApiGatewayDeployment
+      - ApiGatewayApiKey
+    Properties:
+      ApiStages:
+        - ApiId: !Ref ApiGateway
+          Stage: 'test'
+      UsagePlanName: 'MyUsagePlan'
+
+  # Usage Plan Key
+  ApiGatewayUsagePlanKey:
+    Type: 'AWS::ApiGateway::UsagePlanKey'
+    DependsOn: 
+      - ApiGateway
+      - ApiGatewayTestApiResource
+      - ApiGatewayDeployment
+      - ApiGatewayApiKey
+      - ApiGatewayUsagePlan
+    Properties:
+      KeyId: !Ref ApiGatewayApiKey
+      KeyType: 'API_KEY'
+      UsagePlanId: !Ref ApiGatewayUsagePlan
+
+  # CloudFront OriginAccessControl
+  CloudFrontOriginAccessControl:
+    Type: 'AWS::CloudFront::OriginAccessControl'
+    Properties:
+      OriginAccessControlConfig:
+        Name: 'MyOriginAccessControl'
+        OriginAccessControlOriginType: 's3'
+        SigningBehavior: 'always'
+        SigningProtocol: 'sigv4'
+
+  # CloudFront Distribution
+  CloudFrontDistribution:
+    Type: 'AWS::CloudFront::Distribution'
+    Properties:
+      DistributionConfig:
+        Origins:
+          - Id: 's3demomanve.s3.us-east-1.amazonaws.com'
+            DomainName: !Sub '${S3Bucket}.s3.us-east-1.amazonaws.com'
+            S3OriginConfig: {}
+        Enabled: true
+        DefaultCacheBehavior:
+          TargetOriginId: 's3demomanve.s3.us-east-1.amazonaws.com'
+          ViewerProtocolPolicy: 'allow-all'
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: 'none'
+          Compress: true
+          CachePolicyId: !Ref CachingOptimizedCachePolicy
+        PriceClass: 'PriceClass_All'
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+        HttpVersion: 'http2'  
+
+  CachingOptimizedCachePolicy:
+    Type: 'AWS::CloudFront::CachePolicy'
+    Properties:
+      CachePolicyConfig:
+        Comment: 'Managed caching optimized policy'
+        Name: 'CustomCachingOptimizedPolicy'
+        MinTTL: 0
+        MaxTTL: 31536000
+        DefaultTTL: 86400
+        ParametersInCacheKeyAndForwardedToOrigin:
+          HeadersConfig:
+            HeaderBehavior: 'none'
+          QueryStringsConfig:
+            QueryStringBehavior: 'none'
+          CookiesConfig:
+            CookieBehavior: 'none'
+          EnableAcceptEncodingGzip: true                  
+
+Outputs:
+  CloudFrontURL:
+    Description: 'URL del CloudFront'
+    Value: !Sub 'http://${CloudFrontDistribution.DomainName}/index.html'
+
+  DistributionIdCloudFront:
+    Description: 'Distribution ID del CloudFront'
+    Value: !Sub '${CloudFrontDistribution}'
+
+  OriginAccessControlIdCloudFront:
+    Description: 'Origin access control ID de CloudFront'
+    Value: !Sub '${CloudFrontOriginAccessControl}'        
+
+  DynamoDBTableName:
+    Description: 'Nombre de la tabla DynamoDB'
+    Value: !Ref DynamoDBTable
+
+  S3BucketName:
+    Description: 'Nombre del bucket S3'
+    Value: !Ref S3Bucket

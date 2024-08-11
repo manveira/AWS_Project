@@ -1,0 +1,115 @@
+{
+	"info": {
+		"_postman_id": "fee53f48-0e0f-435a-b606-a64ffef4c6ab",
+		"name": "TestApi",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "33274556"
+	},
+	"item": [
+		{
+			"name": "Cloudfront domain Index html",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://{{id_cloudfront}}.cloudfront.net/index.html",
+					"protocol": "https",
+					"host": [
+						"{{id_cloudfront}}",
+						"cloudfront",
+						"net"
+					],
+					"path": [
+						"index.html"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Test Api Dynamo Items",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://{{id_api}}.execute-api.us-east-1.amazonaws.com/test/api",
+					"protocol": "https",
+					"host": [
+						"{{id_api}}",
+						"execute-api",
+						"us-east-1",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"test",
+						"api"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Api Test S3 Items with Apikey",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "x-api-key",
+						"value": "8Z9Op0UI4f8bMyqqL3U4HA6jIeAQ4IQ8fgmP5tw3",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "https://{{id_api}}.execute-api.us-east-1.amazonaws.com/test/api",
+					"protocol": "https",
+					"host": [
+						"{{id_api}}",
+						"execute-api",
+						"us-east-1",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"test",
+						"api"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "id_api",
+			"value": "7f1db8h0z5"
+		},
+		{
+			"key": "id_cloudfront",
+			"value": "dpu6dbsps34mz",
+			"type": "string"
+		}
+	]
+}

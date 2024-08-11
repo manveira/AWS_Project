@@ -1,0 +1,12 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Stack para crear un bucket S3.
+
+Resources:
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: 's3demomanve'
+      AccessControl: 'Private'
+      Tags:
+        - Key: 'lm_troux_uid'
+          Value: '123'
