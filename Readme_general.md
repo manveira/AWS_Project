@@ -1,7 +1,7 @@
 ********  CÓMO IMPLEMENTAR Y REPLICAR EL ESCENARIO *********
 
 Antes de empezar se debe tener configurado las credenciales de aws correctamente para la ejecución de scripts. Además tener instalado aws cli, Boto3 y Python3.
-
+ 
 Ej: 
 
 [default]
